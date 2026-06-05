@@ -30,7 +30,8 @@ class JigsawActivity extends BaseActivity {
     this.cols = config.cols || 6;
     
     // Snap tolerance (in pixels) on the 1200x800 canvas
-    this.tolerance = config.tolerance || 40; 
+    this.tolerance = config.tolerance || 40;
+    this.rotationMode = !!config.rotationMode;
   }
 
   async onStart() {
@@ -78,6 +79,7 @@ class JigsawActivity extends BaseActivity {
 
     // Distribute/randomize initial coordinates (off-screen or on edges for the screen)
     this.pieces.forEach(p => {
+      p.rotation = this.rotationMode ? [0, 90, 180, 270][Math.floor(Math.random() * 4)] : 0;
       // Scatter initial positions along the canvas edges
       const side = Math.floor(Math.random() * 4);
       const padding = 50;
@@ -102,6 +104,24 @@ class JigsawActivity extends BaseActivity {
     });
 
     console.log(`Puzzle initialized. ${this.totalPieces} pieces (${this.rows}x${this.cols}) generated.`);
+
+    // Initialize and start game timer
+    this.elapsedTime = 0;
+    this.timerInterval = setInterval(() => {
+      if (this.status === 'active') {
+        this.elapsedTime++;
+        this.roomManager.io.to(this.roomCode).emit('timer-update', {
+          elapsedTime: this.elapsedTime
+        });
+      }
+    }, 1000);
+  }
+
+  cleanup() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
   }
 
   // Ensures a default synthwave image exists in uploads for clean zero-config setup
@@ -218,7 +238,9 @@ class JigsawActivity extends BaseActivity {
     const dx = Math.abs(currentX - piece.correctX);
     const dy = Math.abs(currentY - piece.correctY);
     
-    const isCorrect = dx <= this.tolerance && dy <= this.tolerance;
+    const isCorrectPos = dx <= this.tolerance && dy <= this.tolerance;
+    const isCorrectRot = !this.rotationMode || (piece.rotation === 0 || piece.rotation % 360 === 0);
+    const isCorrect = isCorrectPos && isCorrectRot;
 
     if (isCorrect) {
       // Snap piece into correct position
@@ -228,11 +250,12 @@ class JigsawActivity extends BaseActivity {
       piece.placedBy = player.id;
       piece.placedByName = player.displayName;
       piece.assignedTo = null;
+      piece.rotation = 0; // ensure rotation is 0 once snapped
       
       this.piecesPlaced++;
       
       // Update participant score
-      player.score += 100; // 100 points for correct placement
+      player.score += 10; // 10 points for correct placement
       
       // Assign a new piece to the player
       this.assignPiecesToPlayer(player.id);
@@ -265,16 +288,24 @@ class JigsawActivity extends BaseActivity {
         pieceId: piece.id,
         currentX,
         currentY,
+        wrongRotation: isCorrectPos && !isCorrectRot,
         progress: this.getProgress()
       };
     }
   }
 
   getStateForScreen() {
+    const room = this.roomManager.getRoom(this.roomCode);
+    const leaderboard = room ? Array.from(room.participants.values())
+      .map(p => ({ displayName: p.displayName, score: p.score, color: p.color }))
+      .sort((a, b) => b.score - a.score) : [];
+
     return {
       status: this.status,
       startedAt: this.startedAt,
       completedAt: this.completedAt,
+      elapsedTime: this.elapsedTime,
+      rotationMode: this.rotationMode,
       imageUrl: this.imageUrl,
       canvasWidth: this.canvasWidth,
       canvasHeight: this.canvasHeight,
@@ -285,6 +316,7 @@ class JigsawActivity extends BaseActivity {
       totalPieces: this.totalPieces,
       piecesPlaced: this.piecesPlaced,
       progress: this.getProgress(),
+      leaderboard,
       pieces: this.pieces.map(p => ({
         id: p.id,
         row: p.row,
@@ -295,7 +327,8 @@ class JigsawActivity extends BaseActivity {
         correctY: p.correctY,
         isPlaced: p.isPlaced,
         placedByName: p.placedByName,
-        imageUrl: p.imageUrl
+        imageUrl: p.imageUrl,
+        rotation: p.rotation || 0
       }))
     };
   }
@@ -311,11 +344,14 @@ class JigsawActivity extends BaseActivity {
         correctX: p.correctX,
         correctY: p.correctY,
         pieceWidth: p.pieceWidth,
-        pieceHeight: p.pieceHeight
+        pieceHeight: p.pieceHeight,
+        rotation: p.rotation || 0
       }));
 
     return {
       status: this.status,
+      elapsedTime: this.elapsedTime,
+      rotationMode: this.rotationMode,
       imageUrl: this.imageUrl,
       canvasWidth: this.canvasWidth,
       canvasHeight: this.canvasHeight,

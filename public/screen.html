@@ -66,15 +66,57 @@
         </div>
         <span class="hud-value" id="hudProgressText">0%</span>
       </div>
+      <div class="hud-item" style="min-width: 100px;">
+        <span class="hud-label">TIME</span>
+        <span class="hud-value neon-yellow" id="hudTimerText">00:00</span>
+      </div>
       <div class="hud-item">
         <span class="hud-label">ROOM</span>
         <span class="hud-value neon-pink" id="hudRoomCode">----</span>
       </div>
     </div>
 
-    <!-- The actual Jigsaw canvas board -->
-    <div class="canvas-container">
-      <canvas id="puzzleCanvas" width="1200" height="800"></canvas>
+    <!-- Main Gameplay Area (Canvas + Leaderboard side-by-side) -->
+    <div class="gameplay-main">
+      <!-- The actual Jigsaw canvas board -->
+      <div class="canvas-container">
+        <canvas id="puzzleCanvas" width="1200" height="800"></canvas>
+        
+        <!-- Completion Overlay / Popup (Synthwave Style) -->
+        <div id="completionOverlay" class="completion-overlay hidden">
+          <div class="completion-modal">
+            <h2 class="neon-pink glow-text-pink bounce-in">🎉 PUZZLE COMPLETED</h2>
+            
+            <div class="completion-stats">
+              <div class="comp-stat-row">
+                <span class="emoji">🏆</span> <span class="label">Winner:</span> <span class="value neon-yellow" id="compWinner">-</span>
+              </div>
+              <div class="comp-stat-row">
+                <span class="emoji">⭐</span> <span class="label">Score:</span> <span class="value neon-cyan" id="compScore">0</span>
+              </div>
+              <div class="comp-stat-row">
+                <span class="emoji">⏱</span> <span class="label">Time:</span> <span class="value neon-pink" id="compTime">00:00</span>
+              </div>
+              <div class="comp-stat-row">
+                <span class="emoji">👥</span> <span class="label">Players:</span> <span class="value" id="compPlayers">0</span>
+              </div>
+              <div class="comp-stat-row">
+                <span class="emoji">🧩</span> <span class="label">Pieces Placed:</span> <span class="value" id="compPieces">0</span>
+              </div>
+            </div>
+            
+            <button class="btn btn-neon" onclick="window.location.reload()">RETURN TO SETUP</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard panel on the right side -->
+      <div class="game-leaderboard-panel">
+        <div class="panel-header">🏆 LEADERBOARD</div>
+        <div class="game-leaderboard-list" id="gameLeaderboardList">
+          <!-- Live leaderboard items will be injected here -->
+        </div>
+      </div>
     </div>
 
     <!-- Real-time activity ticker -->
@@ -87,6 +129,10 @@
   <div id="completionScreen" class="screen-panel hidden">
     <div class="completion-banner">
       <h1 class="bounce-in">PUZZLE SOLVED</h1>
+      <div id="winnerBanner" class="winner-banner hidden">
+        🎉 WINNER: <span id="winnerName"></span><br>
+        Score: <span id="winnerScore"></span>
+      </div>
       <p class="sub-banner">OUTSTANDING COMMUNITY COORDINATION</p>
     </div>
 

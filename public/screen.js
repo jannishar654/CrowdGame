@@ -5,6 +5,13 @@ const SCREEN_STATE = {
   COMPLETE: 'complete'
 };
 
+// Time formatting utility (MM:SS)
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
 let currentState = SCREEN_STATE.LOBBY;
 let socket = null;
 let roomCode = '';
@@ -241,9 +248,32 @@ function setupConnection() {
     document.getElementById('hudProgressText').textContent = `${progress}%`;
   });
 
+  // Event: Piece rotated by player
+  socket.on('piece-rotated', (data) => {
+    if (puzzleData) {
+      const piece = puzzleData.pieces.find(p => p.id === data.pieceId);
+      if (piece) {
+        piece.rotation = data.rotation;
+      }
+    }
+  });
+
   // Event: Puzzle solved!
   socket.on('activity-complete', (data) => {
     triggerPuzzleCompletion(data);
+  });
+
+  // Event: Timer tick from server
+  socket.on('timer-update', (data) => {
+    const hudTimer = document.getElementById('hudTimerText');
+    if (hudTimer) {
+      hudTimer.textContent = formatTime(data.elapsedTime);
+    }
+  });
+
+  // Event: Leaderboard updates in real-time
+  socket.on('leaderboard-update', (data) => {
+    updateLeaderboardUI(data.leaderboard);
   });
 }
 
@@ -291,6 +321,13 @@ function startJigsawPuzzle(state) {
   document.getElementById('gameplayScreen').classList.remove('hidden');
   document.getElementById('gameplayScreen').classList.add('active');
 
+  // Hide completion overlay if it was open
+  const overlay = document.getElementById('completionOverlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.classList.remove('active');
+  }
+
   puzzleData = state;
   if (state.pieces) {
     preCachePieceImages(state.pieces);
@@ -308,6 +345,40 @@ function startJigsawPuzzle(state) {
   // Sync initial HUD
   document.getElementById('hudProgressFill').style.width = `${state.progress}%`;
   document.getElementById('hudProgressText').textContent = `${state.progress}%`;
+
+  // Sync timer display
+  const hudTimer = document.getElementById('hudTimerText');
+  if (hudTimer) {
+    hudTimer.textContent = formatTime(state.elapsedTime || 0);
+  }
+
+  // Render initial leaderboard
+  if (state.leaderboard) {
+    updateLeaderboardUI(state.leaderboard);
+  }
+}
+
+// Render dynamic gameplay leaderboard sidebar
+function updateLeaderboardUI(leaderboard) {
+  const list = document.getElementById('gameLeaderboardList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  leaderboard.forEach((player, index) => {
+    const item = document.createElement('div');
+    item.className = `game-leaderboard-item ${index === 0 ? 'first-place' : ''}`;
+
+    const rankPrefix = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+
+    item.innerHTML = `
+      <div class="rank-name">
+        <span class="rank">${rankPrefix}</span>
+        <span class="name" style="color: ${player.color}">${player.displayName.toUpperCase()}</span>
+      </div>
+      <div class="score">${player.score}</div>
+    `;
+    list.appendChild(item);
+  });
 }
 
 function updateJigsaw() {
@@ -391,19 +462,26 @@ function drawJigsaw() {
   puzzleData.pieces.forEach(p => {
     if (!p.isPlaced && p.imgElement) {
       puzzleCtx.save();
+      
+      const centerX = p.currentX + puzzleData.pieceWidth / 2;
+      const centerY = p.currentY + puzzleData.pieceHeight / 2;
+      puzzleCtx.translate(centerX, centerY);
+      
+      const rotationRad = ((p.rotation || 0) * Math.PI) / 180;
+      puzzleCtx.rotate(rotationRad);
+
       // Draw neon placeholder box glow
       puzzleCtx.shadowBlur = 15;
       puzzleCtx.shadowColor = '#00f3ff';
       puzzleCtx.strokeStyle = 'rgba(0, 243, 255, 0.6)';
       puzzleCtx.lineWidth = 2;
-      // Use puzzleData.pieceHeight (p.pieceHeight is not in the screen state payload)
-      puzzleCtx.strokeRect(p.currentX, p.currentY, puzzleData.pieceWidth, puzzleData.pieceHeight);
+      puzzleCtx.strokeRect(-puzzleData.pieceWidth / 2, -puzzleData.pieceHeight / 2, puzzleData.pieceWidth, puzzleData.pieceHeight);
 
       // Draw actual piece image
       puzzleCtx.drawImage(
         p.imgElement,
-        p.currentX,
-        p.currentY,
+        -puzzleData.pieceWidth / 2,
+        -puzzleData.pieceHeight / 2,
         puzzleData.pieceWidth,
         puzzleData.pieceHeight
       );
@@ -435,43 +513,56 @@ function preCachePieceImages(pieces) {
 }
 
 // 5. SOLVED CELEBRATION
-function triggerPuzzleCompletion({ leaderboard, totalPieces }) {
+function triggerPuzzleCompletion({ leaderboard, totalPieces, elapsedTime, winnerName, winnerScore, totalPlayers, piecesPlaced }) {
   currentState = SCREEN_STATE.COMPLETE;
   Sound.playComplete();
 
-  // Calculate solving time
-  const endTime = new Date();
-  const durationSec = Math.round((endTime - startTime) / 1000);
+  // Populate completion overlay (synthwave modal)
+  document.getElementById('compWinner').textContent = (winnerName || 'N/A').toUpperCase();
+  document.getElementById('compScore').textContent = winnerScore || 0;
+  document.getElementById('compTime').textContent = formatTime(elapsedTime || 0);
+  document.getElementById('compPlayers').textContent = totalPlayers || 0;
+  document.getElementById('compPieces').textContent = piecesPlaced || totalPieces || 0;
 
-  // Transition views — must add 'active' to bring opacity from 0 → 1
-  document.getElementById('gameplayScreen').classList.remove('active');
-  document.getElementById('gameplayScreen').classList.add('hidden');
-  document.getElementById('completionScreen').classList.remove('hidden');
-  document.getElementById('completionScreen').classList.add('active');
+  // Show the overlay above the board
+  const overlay = document.getElementById('completionOverlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    overlay.offsetWidth; // force reflow for smooth scale/opacity transition
+    overlay.classList.add('active');
+  }
 
-  // Fill stats
+  // Populate legacy winner banner & stats for compatibility
+  if (leaderboard && leaderboard.length > 0) {
+    const winner = leaderboard[0];
+    document.getElementById('winnerName').textContent = winner.displayName.toUpperCase();
+    document.getElementById('winnerScore').textContent = winner.score;
+    document.getElementById('winnerBanner').classList.remove('hidden');
+  } else {
+    document.getElementById('winnerBanner').classList.add('hidden');
+  }
+
   document.getElementById('totalSlicesPlaced').textContent = totalPieces;
-  document.getElementById('solvedDuration').textContent = `${durationSec} seconds`;
+  document.getElementById('solvedDuration').textContent = `${elapsedTime || 0} seconds`;
 
-  // Render leaderboard list
+  // Render legacy leaderboard list
   const list = document.getElementById('leaderboardList');
-  list.innerHTML = '';
-  
-  leaderboard.forEach((player, index) => {
-    const item = document.createElement('div');
-    item.className = `leaderboard-item ${index === 0 ? 'first-place' : ''}`;
-    
-    const rankPrefix = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-    
-    item.innerHTML = `
-      <div class="rank-name">
-        <span class="rank">${rankPrefix}</span>
-        <span class="name" style="color: ${player.color}">${player.displayName.toUpperCase()}</span>
-      </div>
-      <div class="score">${player.score} PTS</div>
-    `;
-    list.appendChild(item);
-  });
+  if (list) {
+    list.innerHTML = '';
+    leaderboard.forEach((player, index) => {
+      const item = document.createElement('div');
+      item.className = `leaderboard-item ${index === 0 ? 'first-place' : ''}`;
+      const rankPrefix = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+      item.innerHTML = `
+        <div class="rank-name">
+          <span class="rank">${rankPrefix}</span>
+          <span class="name" style="color: ${player.color}">${player.displayName.toUpperCase()}</span>
+        </div>
+        <div class="score">${player.score} PTS</div>
+      `;
+      list.appendChild(item);
+    });
+  }
 
   // Spawn dynamic rain of completion particles (confetti)
   // Store the interval ID so it can be cancelled on the next game start.
@@ -490,7 +581,7 @@ function gameLoop() {
   updateStars();
   drawBackground();
 
-  if (currentState === SCREEN_STATE.PLAYING) {
+  if (currentState === SCREEN_STATE.PLAYING || currentState === SCREEN_STATE.COMPLETE) {
     updateJigsaw();
     drawJigsaw();
   }

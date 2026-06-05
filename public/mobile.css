@@ -577,3 +577,72 @@ input[type="text"]:focus {
 .piece-tab.active .piece-tab-info {
   color: #fff;
 }
+
+/* Rotation Mode UI */
+.rotate-control-container {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 5px 0;
+}
+
+.rotate-control-container.hidden {
+  display: none !important;
+}
+
+.btn-rotate {
+  background: rgba(0, 243, 255, 0.1);
+  color: var(--color-cyan);
+  border: 1.5px solid var(--color-cyan);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+  font-family: var(--font-main);
+  font-weight: 800;
+  font-size: 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 10px 25px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  letter-spacing: 1.5px;
+  outline: none;
+}
+
+.btn-rotate:hover, .btn-rotate:active {
+  background: var(--color-cyan);
+  color: #000;
+  box-shadow: 0 0 15px var(--color-cyan);
+}
+
+.rotation-indicator {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: rgba(7, 3, 19, 0.85);
+  border: 1px solid var(--color-pink);
+  box-shadow: 0 0 5px var(--color-pink);
+  color: var(--color-pink);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.draggable-piece.rotation-warning {
+  animation: flashWarning 0.8s ease;
+}
+
+@keyframes flashWarning {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+    border-color: var(--color-cyan);
+  }
+  50% {
+    box-shadow: 0 0 25px var(--color-pink);
+    border-color: var(--color-pink);
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}

@@ -6,6 +6,7 @@ class BaseActivity {
     this.status = 'active'; // active, completed
     this.startedAt = new Date();
     this.completedAt = null;
+    this.elapsedTime = 0;
   }
 
   // Lifecycle methods
@@ -16,7 +17,10 @@ class BaseActivity {
   onEnd() {
     this.status = 'completed';
     this.completedAt = new Date();
+    this.cleanup();
   }
+
+  cleanup() {}
 
   // State synchronization formats
   getStateForScreen() {

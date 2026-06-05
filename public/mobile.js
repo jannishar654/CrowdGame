@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let piecesPlacedCount = 0;
   let currentAssignedPieces = [];
   let selectedPieceIndex = 0;
+  let rotationMode = false;
 
   // Workspace configuration
   const CANVAS_WIDTH = 1200;
@@ -92,6 +93,16 @@ document.addEventListener('DOMContentLoaded', () => {
       gameProgressPct.textContent = `${data.state.progress}%`;
       currentAssignedPieces = data.state.assignedPieces || [];
       selectedPieceIndex = 0;
+
+      rotationMode = !!data.state.rotationMode;
+      const rotateControlContainer = document.getElementById('rotateControlContainer');
+      if (rotateControlContainer) {
+        if (rotationMode) {
+          rotateControlContainer.classList.remove('hidden');
+        } else {
+          rotateControlContainer.classList.add('hidden');
+        }
+      }
       
       // Set background image on dragBoard as a ghost reference
       if (data.state.imageUrl) {
@@ -123,6 +134,20 @@ document.addEventListener('DOMContentLoaded', () => {
       renderAssignedPieces();
     });
 
+    socket.on('piece-rotated', (data) => {
+      const piece = currentAssignedPieces.find(p => p.id === data.pieceId);
+      if (piece) {
+        piece.rotation = data.rotation;
+        const el = document.getElementById(piece.id);
+        if (el) {
+          const img = el.querySelector('img');
+          if (img) img.style.transform = `rotate(${piece.rotation}deg)`;
+          const indicator = el.querySelector('.rotation-indicator');
+          if (indicator) indicator.textContent = `${piece.rotation}°`;
+        }
+      }
+    });
+
     socket.on('piece-placed', (data) => {
       gameProgressPct.textContent = `${data.progress}%`;
       // Check if this was solved by me
@@ -137,8 +162,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // Find matching piece and run shake animation
       const el = document.getElementById(data.pieceId);
       if (el) {
-        el.classList.add('shake');
-        setTimeout(() => el.classList.remove('shake'), 500);
+        if (data.wrongRotation) {
+          el.classList.add('rotation-warning');
+          setTimeout(() => el.classList.remove('rotation-warning'), 800);
+        } else {
+          el.classList.add('shake');
+          setTimeout(() => el.classList.remove('shake'), 500);
+        }
       }
     });
 
@@ -190,6 +220,21 @@ document.addEventListener('DOMContentLoaded', () => {
     el.style.left = '50%';
     el.style.top = '75%';
     el.innerHTML = `<img src="${p.imageUrl}" alt="Puzzle Piece" draggable="false" />`;
+
+    if (rotationMode) {
+      // Add rotation indicator badge
+      const indicator = document.createElement('div');
+      indicator.className = 'rotation-indicator';
+      indicator.textContent = `${p.rotation || 0}°`;
+      el.appendChild(indicator);
+
+      // Rotate image element
+      const img = el.querySelector('img');
+      if (img) {
+        img.style.transform = `rotate(${p.rotation || 0}deg)`;
+        img.style.transition = 'transform 0.2s ease';
+      }
+    }
 
     assignedPiecesPool.appendChild(el);
     setupDragging(el, p);
@@ -352,5 +397,34 @@ document.addEventListener('DOMContentLoaded', () => {
         navigator.vibrate(200);
       }
     }
+  }
+
+  // 5. ROTATION INTERACTIVE CONTROL
+  const rotatePieceBtn = document.getElementById('rotatePieceBtn');
+  if (rotatePieceBtn) {
+    rotatePieceBtn.addEventListener('click', () => {
+      if (!currentAssignedPieces || currentAssignedPieces.length === 0) return;
+      const p = currentAssignedPieces[selectedPieceIndex];
+      if (!p) return;
+
+      // Update rotation state clockwise by 90 degrees
+      p.rotation = ((p.rotation || 0) + 90) % 360;
+
+      // Update UI immediately (smooth rotation transition on the image tag)
+      const el = document.getElementById(p.id);
+      if (el) {
+        const img = el.querySelector('img');
+        if (img) {
+          img.style.transform = `rotate(${p.rotation}deg)`;
+        }
+        const indicator = el.querySelector('.rotation-indicator');
+        if (indicator) {
+          indicator.textContent = `${p.rotation}°`;
+        }
+      }
+
+      // Emit rotation change to server via socket
+      socket.emit('rotate-piece', { pieceId: p.id });
+    });
   }
 });

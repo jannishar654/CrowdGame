@@ -96,6 +96,12 @@ function initSockets(io) {
         participantsCount: roomManager.getConnectedCount(roomCode)
       });
 
+      // Broadcast leaderboard update
+      const leaderboard = Array.from(room.participants.values())
+        .map(p => ({ displayName: p.displayName, score: p.score, color: p.color }))
+        .sort((a, b) => b.score - a.score);
+      io.to(roomCode).emit('leaderboard-update', { leaderboard });
+
       // If activity is already running, send the starting state immediately to the new player
       if (room.activity) {
         socket.emit('activity-start', {
@@ -111,7 +117,7 @@ function initSockets(io) {
     //   a) carry a valid admin JWT (socket.isAdmin), OR
     //   b) be the registered host socket for that room.
     // This prevents any arbitrary player from starting or restarting the game.
-    socket.on('admin-start-activity', async ({ roomCode, rows, cols, imageUrl }) => {
+    socket.on('admin-start-activity', async ({ roomCode, rows, cols, imageUrl, rotationMode }) => {
       console.log(`Admin requested activity start in room: ${roomCode}`);
 
       const room = roomManager.getRoom(roomCode);
@@ -131,7 +137,8 @@ function initSockets(io) {
       const activityConfig = {
         rows: parseInt(rows) || 4,
         cols: parseInt(cols) || 6,
-        imageUrl: imageUrl
+        imageUrl: imageUrl,
+        rotationMode: !!rotationMode
       };
 
       const result = await roomManager.startActivity(roomCode, 'jigsaw', activityConfig);
@@ -192,6 +199,14 @@ function initSockets(io) {
 
       // If correct, broadcast placement update to all clients in the room
       if (result.correct) {
+        const { db } = require('../services/db');
+        if (db) {
+          db('participants')
+            .where({ room_id: room.id, display_name: player.displayName })
+            .update({ score: player.score })
+            .catch(err => console.error('DB error updating participant score:', err));
+        }
+
         io.to(socket.roomCode).emit('piece-placed', {
           pieceId: result.pieceId,
           correctX: result.correctX,
@@ -201,6 +216,12 @@ function initSockets(io) {
           progress: result.progress,
           isSolved: result.isSolved
         });
+
+        // Broadcast leaderboard update
+        const leaderboard = Array.from(room.participants.values())
+          .map(p => ({ displayName: p.displayName, score: p.score, color: p.color }))
+          .sort((a, b) => b.score - a.score);
+        io.to(socket.roomCode).emit('leaderboard-update', { leaderboard });
 
         // Send a fresh set of assigned pieces specifically to the placing player
         socket.emit('assign-pieces', {
@@ -214,9 +235,16 @@ function initSockets(io) {
             .map(p => ({ displayName: p.displayName, score: p.score, color: p.color }))
             .sort((a, b) => b.score - a.score);
 
+          const winner = leaderboard[0] || null;
+
           io.to(socket.roomCode).emit('activity-complete', {
             leaderboard,
-            totalPieces: room.activity.totalPieces
+            totalPieces: room.activity.totalPieces,
+            elapsedTime: room.activity.elapsedTime,
+            winnerName: winner ? winner.displayName : 'N/A',
+            winnerScore: winner ? winner.score : 0,
+            totalPlayers: room.participants.size,
+            piecesPlaced: room.activity.piecesPlaced
           });
 
           room.status = 'completed';
@@ -230,7 +258,26 @@ function initSockets(io) {
         });
 
         // Notify the player of the incorrect placement
-        socket.emit('placement-incorrect', { pieceId: result.pieceId });
+        socket.emit('placement-incorrect', {
+          pieceId: result.pieceId,
+          wrongRotation: result.wrongRotation
+        });
+      }
+    });
+
+    // Handle piece rotation from player
+    socket.on('rotate-piece', ({ pieceId }) => {
+      if (socket.role !== 'player' || !socket.roomCode) return;
+      const room = roomManager.getRoom(socket.roomCode);
+      if (!room || !room.activity || room.status !== 'active') return;
+
+      const player = room.participants.get(socket.playerId);
+      if (!player) return;
+
+      const piece = room.activity.pieces.find(p => p.id === pieceId);
+      if (piece && piece.assignedTo === player.id && !piece.isPlaced) {
+        piece.rotation = ((piece.rotation || 0) + 90) % 360;
+        io.to(socket.roomCode).emit('piece-rotated', { pieceId, rotation: piece.rotation });
       }
     });
 

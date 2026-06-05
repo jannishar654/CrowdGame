@@ -167,6 +167,11 @@ class RoomManager {
         // Notify all participants
         this.io.to(roomCode).emit('host-disconnected');
         
+        // Clean up activity (clear timers, etc.)
+        if (room.activity && typeof room.activity.cleanup === 'function') {
+          room.activity.cleanup();
+        }
+        
         // Delete the room
         this.rooms.delete(roomCode);
         
