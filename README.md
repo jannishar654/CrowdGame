@@ -62,29 +62,6 @@ An optional puzzle rotation system has been introduced to increase game difficul
 
 ---
 
-## 🛠 Technology Stack
-
-### Backend
-- Node.js
-- Express.js
-- Socket.io
-
-### Database
-- SQLite (Development)
-- PostgreSQL (Optional Production Support)
-
-### Storage & Processing
-- Sharp (Image Processing)
-- Redis (Optional)
-- AWS S3 (Optional)
-
-### Frontend
-- HTML
-- CSS
-- JavaScript
-
----
-
 ## 🚀 Installation
 
 ### 1. Clone the Repository
@@ -133,6 +110,41 @@ https://localhost:3000/join/DEMO
 ```
 
 ---
+
+## 🛠 Technology Stack
+
+### Backend
+- Node.js
+- Express.js
+- Socket.io
+
+### Database
+- SQLite (Development)
+- PostgreSQL (Optional Production Support)
+
+### Storage & Processing
+- Sharp (Image Processing)
+- Redis (Optional)
+- AWS S3 (Optional)
+
+### Frontend
+- HTML
+- CSS
+- JavaScript
+
+---
+
+## 📸 Screenshots
+
+| Admin Dashboard | Real-Time Leaderboard |
+|----------------|----------------------|
+| ![](screenshots/dashboard.png) | ![](screenshots/mission.png) |
+
+| Rotation Mode |
+|--------------|
+| ![](screenshots/rotationOption.png) |
+
+
 
 ## 🎯 How to Play
 
