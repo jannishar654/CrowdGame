@@ -172,10 +172,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    socket.on('activity-complete', () => {
+    socket.on('activity-complete', (data) => {
       gameplaySection.classList.add('hidden');
       completeSection.classList.remove('hidden');
-      myContributionsVal.textContent = piecesPlacedCount;
+      
+      // Find my score in the final leaderboard
+      let myScore = 0;
+      if (data && data.leaderboard) {
+        const me = data.leaderboard.find(p => p.displayName.toLowerCase() === myDisplayName.toLowerCase());
+        if (me) {
+          myScore = me.score;
+        }
+      }
+      
+      // Fallback
+      if (!myScore) {
+        myScore = piecesPlacedCount * 10;
+      }
+      
+      myContributionsVal.textContent = myScore;
     });
 
     socket.on('host-disconnected', () => {
